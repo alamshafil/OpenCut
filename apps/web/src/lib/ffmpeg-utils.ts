@@ -9,7 +9,7 @@ export const initFFmpeg = async (): Promise<FFmpeg> => {
   ffmpeg = new FFmpeg();
   
   // Use locally hosted files instead of CDN
-  const baseURL = '/ffmpeg';
+  const baseURL = '/OpenCut/ffmpeg';
   
   await ffmpeg.load({
     coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
