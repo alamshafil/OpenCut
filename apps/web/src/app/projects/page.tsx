@@ -92,7 +92,7 @@ export default function ProjectsPage() {
   const handleCreateProject = async () => {
     const projectId = await createNewProject("New Project");
     console.log("projectId", projectId);
-    router.push(`/editor/${projectId}`);
+    router.push(`/editor?id=${projectId}`);
   };
 
   const handleSelectProject = (projectId: string, checked: boolean) => {
@@ -521,7 +521,7 @@ function ProjectCard({
           {cardContent}
         </button>
       ) : (
-        <Link href={`/editor/${project.id}`} className="block group">
+        <Link href={`/editor?id=${project.id}`} className="block group">
           {cardContent}
         </Link>
       )}
