@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
-} from "../../../components/ui/resizable";
-import { MediaPanel } from "../../../components/editor/media-panel";
-import { PropertiesPanel } from "../../../components/editor/properties-panel";
-import { Timeline } from "../../../components/editor/timeline";
-import { PreviewPanel } from "../../../components/editor/preview-panel";
+} from "../../components/ui/resizable";
+import { MediaPanel } from "../../components/editor/media-panel";
+import { PropertiesPanel } from "../../components/editor/properties-panel";
+import { Timeline } from "../../components/editor/timeline";
+import { PreviewPanel } from "../../components/editor/preview-panel";
 import { EditorHeader } from "@/components/editor-header";
 import { usePanelStore } from "@/stores/panel-store";
 import { useProjectStore } from "@/stores/project-store";
@@ -18,7 +18,7 @@ import { EditorProvider } from "@/components/editor-provider";
 import { usePlaybackControls } from "@/hooks/use-playback-controls";
 import { Onboarding } from "@/components/onboarding";
 
-export default function Editor() {
+function EditorContent() {
   const {
     toolsPanel,
     previewPanel,
@@ -33,9 +33,9 @@ export default function Editor() {
   } = usePanelStore();
 
   const { activeProject, loadProject, createNewProject } = useProjectStore();
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const projectId = params.project_id as string;
+  const projectId = searchParams.get('id');
   const handledProjectIds = useRef<Set<string>>(new Set());
 
   usePlaybackControls();
@@ -58,7 +58,7 @@ export default function Editor() {
         handledProjectIds.current.add(projectId);
 
         const newProjectId = await createNewProject("Untitled Project");
-        router.replace(`/editor/${newProjectId}`);
+        router.replace(`/editor?id=${newProjectId}`);
         return;
       }
     };
@@ -141,5 +141,13 @@ export default function Editor() {
         <Onboarding />
       </div>
     </EditorProvider>
+  );
+}
+
+export default function Editor() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <EditorContent />
+    </Suspense>
   );
 }
