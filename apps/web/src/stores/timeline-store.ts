@@ -96,7 +96,11 @@ interface TimelineStore {
   removeTrack: (trackId: string) => void;
   removeTrackWithRipple: (trackId: string) => void;
   addElementToTrack: (trackId: string, element: CreateTimelineElement) => void;
-  removeElementFromTrack: (trackId: string, elementId: string) => void;
+  removeElementFromTrack: (
+    trackId: string,
+    elementId: string,
+    pushHistory?: boolean
+  ) => void;
   moveElementToTrack: (
     fromTrackId: string,
     toTrackId: string,
@@ -122,6 +126,7 @@ interface TimelineStore {
     pushHistory?: boolean
   ) => void;
   toggleTrackMute: (trackId: string) => void;
+  toggleElementHidden: (trackId: string, elementId: string) => void;
 
   // Split operations for elements
   splitElement: (
@@ -146,7 +151,7 @@ interface TimelineStore {
     trackId: string,
     elementId: string,
     newFile: File
-  ) => Promise<boolean>;
+  ) => Promise<{ success: boolean; error?: string }>;
 
   // Ripple editing functions
   updateElementStartTimeWithRipple: (
@@ -156,7 +161,8 @@ interface TimelineStore {
   ) => void;
   removeElementFromTrackWithRipple: (
     trackId: string,
-    elementId: string
+    elementId: string,
+    pushHistory?: boolean
   ) => void;
 
   // Computed values
@@ -553,13 +559,13 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
       get().selectElement(trackId, newElement.id);
     },
 
-    removeElementFromTrack: (trackId, elementId) => {
+    removeElementFromTrack: (trackId, elementId, pushHistory = true) => {
       const { rippleEditingEnabled } = get();
 
       if (rippleEditingEnabled) {
-        get().removeElementFromTrackWithRipple(trackId, elementId);
+        get().removeElementFromTrackWithRipple(trackId, elementId, pushHistory);
       } else {
-        get().pushHistory();
+        if (pushHistory) get().pushHistory();
         updateTracksAndSave(
           get()
             ._tracks.map((track) =>
@@ -577,12 +583,16 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
       }
     },
 
-    removeElementFromTrackWithRipple: (trackId, elementId) => {
+    removeElementFromTrackWithRipple: (
+      trackId,
+      elementId,
+      pushHistory = true
+    ) => {
       const { _tracks, rippleEditingEnabled } = get();
 
       if (!rippleEditingEnabled) {
         // If ripple editing is disabled, use regular removal
-        get().removeElementFromTrack(trackId, elementId);
+        get().removeElementFromTrack(trackId, elementId, pushHistory);
         return;
       }
 
@@ -591,7 +601,7 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
 
       if (!element || !track) return;
 
-      get().pushHistory();
+      if (pushHistory) get().pushHistory();
 
       const elementStartTime = element.startTime;
       const elementDuration =
@@ -745,13 +755,16 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
       pushHistory = true
     ) => {
       if (pushHistory) get().pushHistory();
+      const clampedStartTime = Math.max(0, startTime);
       updateTracksAndSave(
         get()._tracks.map((track) =>
           track.id === trackId
             ? {
                 ...track,
                 elements: track.elements.map((element) =>
-                  element.id === elementId ? { ...element, startTime } : element
+                  element.id === elementId
+                    ? { ...element, startTime: clampedStartTime }
+                    : element
                 ),
               }
             : track
@@ -790,8 +803,7 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
 
         const updatedElements = currentTrack.elements.map((currentElement) => {
           if (currentElement.id === elementId && currentTrack.id === trackId) {
-            // Update the moved element
-            return { ...currentElement, startTime: newStartTime };
+            return { ...currentElement, startTime: Math.max(0, newStartTime) };
           }
 
           // Only apply ripple effects if we should process this track
@@ -853,6 +865,24 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
       updateTracksAndSave(
         get()._tracks.map((track) =>
           track.id === trackId ? { ...track, muted: !track.muted } : track
+        )
+      );
+    },
+
+    toggleElementHidden: (trackId, elementId) => {
+      get().pushHistory();
+      updateTracksAndSave(
+        get()._tracks.map((track) =>
+          track.id === trackId
+            ? {
+                ...track,
+                elements: track.elements.map((element) =>
+                  element.id === elementId
+                    ? { ...element, hidden: !element.hidden }
+                    : element
+                ),
+              }
+            : track
         )
       );
     },
@@ -1066,18 +1096,33 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
     },
 
     // Replace media for an element
-    replaceElementMedia: async (trackId, elementId, newFile) => {
+    replaceElementMedia: async (
+      trackId: string,
+      elementId: string,
+      newFile: File
+    ): Promise<{ success: boolean; error?: string }> => {
       const { _tracks } = get();
       const track = _tracks.find((t) => t.id === trackId);
       const element = track?.elements.find((c) => c.id === elementId);
 
-      if (!element || element.type !== "media") return false;
+      if (!element) {
+        return { success: false, error: "Timeline element not found" };
+      }
+
+      if (element.type !== "media") {
+        return {
+          success: false,
+          error: "Replace is only available for media clips",
+        };
+      }
 
       try {
         const mediaStore = useMediaStore.getState();
         const projectStore = useProjectStore.getState();
 
-        if (!projectStore.activeProject) return false;
+        if (!projectStore.activeProject) {
+          return { success: false, error: "No active project found" };
+        }
 
         // Import required media processing functions
         const {
@@ -1088,7 +1133,13 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
         } = await import("./media-store");
 
         const fileType = getFileType(newFile);
-        if (!fileType) return false;
+        if (!fileType) {
+          return {
+            success: false,
+            error:
+              "Unsupported file type. Please select a video, audio, or image file.",
+          };
+        }
 
         // Process the new media file
         const mediaData: any = {
@@ -1098,32 +1149,56 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
           url: URL.createObjectURL(newFile),
         };
 
-        // Get media-specific metadata
-        if (fileType === "image") {
-          const { width, height } = await getImageDimensions(newFile);
-          mediaData.width = width;
-          mediaData.height = height;
-        } else if (fileType === "video") {
-          const [duration, { thumbnailUrl, width, height }] = await Promise.all(
-            [getMediaDuration(newFile), generateVideoThumbnail(newFile)]
-          );
-          mediaData.duration = duration;
-          mediaData.thumbnailUrl = thumbnailUrl;
-          mediaData.width = width;
-          mediaData.height = height;
-        } else if (fileType === "audio") {
-          mediaData.duration = await getMediaDuration(newFile);
+        try {
+          // Get media-specific metadata
+          if (fileType === "image") {
+            const { width, height } = await getImageDimensions(newFile);
+            mediaData.width = width;
+            mediaData.height = height;
+          } else if (fileType === "video") {
+            const [duration, { thumbnailUrl, width, height }] =
+              await Promise.all([
+                getMediaDuration(newFile),
+                generateVideoThumbnail(newFile),
+              ]);
+            mediaData.duration = duration;
+            mediaData.thumbnailUrl = thumbnailUrl;
+            mediaData.width = width;
+            mediaData.height = height;
+          } else if (fileType === "audio") {
+            mediaData.duration = await getMediaDuration(newFile);
+          }
+        } catch (error) {
+          return {
+            success: false,
+            error: `Failed to process ${fileType} file: ${error instanceof Error ? error.message : "Unknown error"}`,
+          };
         }
 
         // Add new media item to store
-        await mediaStore.addMediaItem(projectStore.activeProject.id, mediaData);
+        try {
+          await mediaStore.addMediaItem(
+            projectStore.activeProject.id,
+            mediaData
+          );
+        } catch (error) {
+          return {
+            success: false,
+            error: `Failed to add media to project: ${error instanceof Error ? error.message : "Unknown error"}`,
+          };
+        }
 
         // Find the newly created media item
         const newMediaItem = mediaStore.mediaItems.find(
           (item) => item.file === newFile
         );
 
-        if (!newMediaItem) return false;
+        if (!newMediaItem) {
+          return {
+            success: false,
+            error: "Failed to create media item in project. Please try again.",
+          };
+        }
 
         get().pushHistory();
 
@@ -1149,15 +1224,13 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
           )
         );
 
-        return true;
+        return { success: true };
       } catch (error) {
-        console.log(
-          JSON.stringify({
-            error: "Failed to replace element media",
-            details: error,
-          })
-        );
-        return false;
+        console.error("Failed to replace element media:", error);
+        return {
+          success: false,
+          error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
       }
     },
 
