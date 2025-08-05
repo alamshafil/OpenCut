@@ -217,7 +217,7 @@ export class TimelineDataTransformer {
 
       // Validate elements
       for (const element of track.elements) {
-        if (!element.id || element.startTime < 0 || element.duration <= 0) {
+        if (!element.id) {
           errors.push(`Invalid element: ${element.id || 'unknown'} in track ${track.name}`);
         }
 
