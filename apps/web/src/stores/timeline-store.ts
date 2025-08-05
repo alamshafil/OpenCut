@@ -10,17 +10,16 @@ import {
   ensureMainTrack,
   validateElementTrackCompatibility,
 } from "@/types/timeline";
-import { useEditorStore } from "./editor-store";
 import {
   useMediaStore,
   getMediaAspectRatio,
   type MediaItem,
 } from "./media-store";
+import { findBestCanvasPreset } from "@/lib/editor-utils";
 import { storageService } from "@/lib/storage/storage-service";
 import { useProjectStore } from "./project-store";
 import { generateUUID } from "@/lib/utils";
 import { TIMELINE_CONSTANTS } from "@/constants/timeline-constants";
-import { toast } from "sonner";
 import { checkElementOverlaps, resolveElementOverlaps } from "@/lib/timeline";
 
 // Helper function to manage element naming with suffixes
@@ -533,9 +532,10 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
           mediaItem &&
           (mediaItem.type === "image" || mediaItem.type === "video")
         ) {
-          const editorStore = useEditorStore.getState();
-          editorStore.setCanvasSizeFromAspectRatio(
-            getMediaAspectRatio(mediaItem)
+          const projectStore = useProjectStore.getState();
+          projectStore.updateCanvasSize(
+            findBestCanvasPreset(getMediaAspectRatio(mediaItem)),
+            "original"
           );
         }
 
@@ -1445,16 +1445,24 @@ export const useTimelineStore = create<TimelineStore>((set, get) => {
 
     addMediaAtTime: (item, currentTime = 0) => {
       const trackType = item.type === "audio" ? "audio" : "media";
-      const targetTrackId = get().findOrCreateTrack(trackType);
-
       const duration =
         item.duration || TIMELINE_CONSTANTS.DEFAULT_IMAGE_DURATION;
 
-      if (get().checkElementOverlap(targetTrackId, currentTime, duration)) {
-        toast.error(
-          "Cannot place element here - it would overlap with existing elements"
-        );
-        return false;
+      // Get all tracks of the right type
+      const tracks = get()._tracks.filter((t) => t.type === trackType);
+
+      // Try to find a track with no overlap
+      let targetTrackId = null;
+      for (const track of tracks) {
+        if (!get().checkElementOverlap(track.id, currentTime, duration)) {
+          targetTrackId = track.id;
+          break;
+        }
+      }
+
+      // If no free track found, create a new one
+      if (!targetTrackId) {
+        targetTrackId = get().addTrack(trackType);
       }
 
       get().addElementToTrack(targetTrackId, {
