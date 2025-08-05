@@ -215,7 +215,7 @@ export const useSpeechToTextStore = create<SpeechToTextStore>((set, get) => ({
 
       try {
         // Create new worker from public directory
-        const worker = new Worker('/workers/speech-to-text.worker.js', {
+        const worker = new Worker('/OpenCut/workers/speech-to-text.worker.js', {
           type: 'module'
         });
 
