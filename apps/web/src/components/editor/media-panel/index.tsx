@@ -7,13 +7,19 @@ import { TextView } from "./views/text";
 import { Separator } from "@/components/ui/separator";
 import { SettingsView } from "./views/settings";
 import { Captions } from "./views/captions";
+import { TTSView } from "./views/tts";
 
 export function MediaPanel() {
   const { activeTab } = useMediaPanelStore();
 
   const viewMap: Record<Tab, React.ReactNode> = {
     media: <MediaView />,
-    sounds: <div className="p-4 text-muted-foreground">Sounds view does not work in this dev build. Please use the official build.</div>,
+    sounds: (
+      <div className="p-0 mt-4 flex flex-col h-full">
+        <TTSView />
+        <p className="text-xs p-4 mb-2 text-muted-foreground">Sounds API does not work in this dev build.</p>
+      </div>
+    ),
     text: <TextView />,
     stickers: (
       <div className="p-4 text-muted-foreground">

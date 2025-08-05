@@ -284,7 +284,7 @@ export class KokoroTTSService {
 
   private initializeWorker() {
     if (typeof Worker !== 'undefined') {
-      this.worker = new Worker('/workers/tts.worker.js', { type: 'module' });
+      this.worker = new Worker('/OpenCut/workers/tts.worker.js', { type: 'module' });
       this.worker.onmessage = this.handleWorkerMessage.bind(this);
       this.worker.onerror = (error) => {
         console.error('TTS Worker error:', error);
