@@ -31,9 +31,7 @@ import {
 } from "@opencut/video-export";
 import { useTimelineStore } from "@/stores/timeline-store";
 import { useMediaStore } from "@/stores/media-store";
-import { useProjectStore } from "@/stores/project-store";
-import { useEditorStore } from "@/stores/editor-store";
-import { toast } from "sonner";
+import { useProjectStore, DEFAULT_CANVAS_SIZE } from "@/stores/project-store";import { toast } from "sonner";
 import { Download, Settings, AlertTriangle, CheckCircle } from "lucide-react";
 
 interface ExportState {
@@ -150,11 +148,12 @@ export function VideoExportDialog({
   const { tracks } = useTimelineStore();
   const { mediaItems } = useMediaStore();
   const { activeProject } = useProjectStore();
-  const { canvasSize } = useEditorStore();
 
   const presets = getExportPresets();
   const isSupported = isWebCodecsSupported();
 
+  // Get canvas size from active project
+  const canvasSize = activeProject?.canvasSize || DEFAULT_CANVAS_SIZE;
   // Subscribe to debug logs
   useEffect(() => {
     const unsubscribe = debugLogger.addListener((logs) => {
